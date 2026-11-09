@@ -1,0 +1,4 @@
+include:
+  - ./llm/compose.yaml
+  - ./asr/compose.yaml
+  - ./tts/compose.yaml

@@ -1,0 +1,39 @@
+services:
+  tts:
+    tty: true
+    build:
+      context: .
+      dockerfile: ${CONTAINERFILE:-Containerfile}
+    container_name: kai-tts
+    depends_on:
+      llm:
+        condition: service_healthy
+    entrypoint: ["vllm", "serve"]
+    command: >
+      openbmb/VoxCPM2 --omni --host 0.0.0.0 --port 8091
+      --gpu-memory-utilization 0.2
+      --trust-remote-code
+      --enforce-eager
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    ports:
+      - 8091:8091/tcp
+    volumes:
+      - ${HF_HUB_CACHE:-/opt/huggingface_cache/hub}:/root/.cache/huggingface/hub
+      - ${VLLM_CACHE:-./.cache-tts}:/root/.cache/vllm/
+    environment:
+      - TRITON_CACHE_DIR=/root/.cache/vllm/triton
+      - OMP_NUM_THREADS=1
+      - FLASHINFER_ENABLE_GQA=1
+      - HF_HUB_OFFLINE=1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8091/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 480s
