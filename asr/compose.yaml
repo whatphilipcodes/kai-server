@@ -5,9 +5,9 @@ services:
       context: .
       dockerfile: ${CONTAINERFILE:-Containerfile}
     container_name: kai-asr
-    # depends_on:
-    #   tts:
-    #     condition: service_healthy
+    depends_on:
+      tts:
+        condition: service_healthy
     entrypoint: ["vllm", "serve"]
     command: >
       mistralai/Voxtral-Mini-4B-Realtime-2602 --tokenizer-mode mistral --host 0.0.0.0 --port 8090
