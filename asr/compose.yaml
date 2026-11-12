@@ -1,3 +1,4 @@
+# ! pre_start requires docker compose v3.5.0+ !
 services:
   asr:
     tty: true
@@ -5,17 +6,20 @@ services:
       context: .
       dockerfile: ${CONTAINERFILE:-Containerfile}
     container_name: kai-asr
-    depends_on:
+    depends_on: # not functionally necessary but prevents OOM when launching all services launch at once
       tts:
         condition: service_healthy
     entrypoint: ["vllm", "serve"]
     command: >
-      mistralai/Voxtral-Mini-4B-Realtime-2602 --tokenizer-mode mistral --host 0.0.0.0 --port 8090
-      --compilation_config '{"cudagraph_mode": "PIECEWISE"}'
-      --tensor-parallel-size 1
-      --gpu-memory-utilization 0.3
-      --max-model-len 16384
-      --max-num-batched-tokens 2048
+      /models/voxtral
+        --served-model-name mistralai/Voxtral-Mini-4B-Realtime-2602
+        --tokenizer-mode mistral --host 0.0.0.0 --port 8090
+        --compilation_config '{"cudagraph_mode": "PIECEWISE"}'
+        --tensor-parallel-size 1
+        --gpu-memory-utilization 0.3
+        --max-model-len 16384
+        --max-num-batched-tokens 2048
+        --max-num-seqs 4
     deploy:
       resources:
         reservations:
@@ -25,9 +29,15 @@ services:
               capabilities: [gpu]
     ports:
       - 8090:8090/tcp
+    pre_start:
+      - entrypoint: ["/bin/sh", "/opt/patch-delay.sh"]
+        environment:
+          - VOXTRAL_DELAY_MS=${VOXTRAL_DELAY_MS:-160}   # 160 | 240 | 480 (model default); multiple of 80, max 1200
     volumes:
       - ${HF_HUB_CACHE:-/opt/huggingface_cache/hub}:/root/.cache/huggingface/hub
       - ${VLLM_CACHE:-./.cache-asr}:/root/.cache/vllm/
+      - ./patch/patch-delay.sh:/opt/patch-delay.sh:ro
+      - ${VLLM_CACHE:-./.cache-asr}/model-patched:/models/voxtral
     environment:
       - TRITON_CACHE_DIR=/root/.cache/vllm/triton
       - OMP_NUM_THREADS=1
