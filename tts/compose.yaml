@@ -26,6 +26,7 @@ services:
     volumes:
       - ${HF_HUB_CACHE:-/opt/huggingface_cache/hub}:/root/.cache/huggingface/hub
       - ${VLLM_CACHE:-./.cache-tts}:/root/.cache/vllm/
+      - ${VLLM_CACHE:-./.cache-tts}:/root/.cache/vllm-omni/
     environment:
       - TRITON_CACHE_DIR=/root/.cache/vllm/triton
       - OMP_NUM_THREADS=1
