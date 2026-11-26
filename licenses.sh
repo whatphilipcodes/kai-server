@@ -1,20 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SYFT_VERSION=v1.14.0
 OUT=${1:-licenses-kai-server.csv}
 
-docker compose pull --ignore-buildable -q 2>/dev/null || true
+SCRIPT=$(cat <<'PY'
+import csv
+import sys
+from importlib.metadata import distributions
+
+writer = csv.writer(sys.stdout, quoting=csv.QUOTE_ALL, lineterminator="\n")
+for dist in sorted(distributions(), key=lambda d: (d.metadata["Name"] or "").lower()):
+    meta = dist.metadata
+    classifiers = "; ".join(c.split(" :: ")[-1] for c in meta.get_all("Classifier", []) if c.startswith("License ::"))
+    first_line = (meta.get("License") or "").strip().split("\n")[0]
+    license = meta.get("License-Expression") or classifiers or first_line or "UNKNOWN"
+    writer.writerow([sys.argv[1], meta["Name"], meta["Version"], license])
+PY
+)
+
 docker compose build -q
 
 echo '"Image","Name","Version","License"' > "$OUT"
 for img in $(docker compose config --images); do
-  docker run --rm \
-    -v /var/run/docker.sock:/var/run/docker.sock \
-    "anchore/syft:${SYFT_VERSION}" "docker:${img}" -o syft-json -q \
-  | docker run --rm -i ghcr.io/jqlang/jq:1.7.1 -r --arg img "$img" '
-      .artifacts[]
-      | [ $img, .name, .version,
-          ( [ .licenses[].value ] | join(", ") ) ]
-      | @csv' >> "$OUT"
+  docker run --rm --entrypoint python3 "$img" -c "$SCRIPT" "$img" >> "$OUT"
 done
